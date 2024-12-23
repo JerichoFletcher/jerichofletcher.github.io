@@ -2,10 +2,14 @@ name: Publish on GitHub Pages
 on:
   push:
     branches:
-      - gh-pages
+      - main
 jobs:
   publish-pages:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
