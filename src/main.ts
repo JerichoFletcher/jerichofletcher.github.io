@@ -1,10 +1,5 @@
 import './style.css'
 
-function renderLoop(gl: WebGLRenderingContext){
-  gl.clearColor(0, 0.5, 0, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-}
-
 function main(){
   const canvas = document.getElementById("cnv") as HTMLCanvasElement;
   const gl = canvas.getContext("webgl");
@@ -20,7 +15,25 @@ function main(){
   
   document.addEventListener("resize", resizeCanvas);
   resizeCanvas();
-  renderLoop(gl);
+  
+  function renderLoop(t: number){
+    if(!gl)return;
+
+    const rate = 0.001;
+    const trigNorm = (x: number) => (x + 1) / 2;
+
+    gl.clearColor(
+      trigNorm(Math.sin(rate * t)),
+      trigNorm(Math.sin(rate * t - Math.PI * 1 / 3)),
+      trigNorm(Math.sin(rate * t - Math.PI * 2 / 3)),
+      1
+    );
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    requestAnimationFrame(renderLoop);
+  }
+
+  renderLoop(0);
 }
 
 main();
