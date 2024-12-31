@@ -55,6 +55,8 @@ async function beginDraw(glWrapper: GlWrapper){
     gl.clear(gl.COLOR_BUFFER_BIT);
     
     program.use();
+    program.setUniform("u_time", t / 3000);
+
     vao.bind();
     gl.drawElements(gl.TRIANGLES, eData.length, gl.UNSIGNED_SHORT, 0);
     vao.unbind();
