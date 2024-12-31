@@ -38,7 +38,7 @@ export class GlWrapper{
     return this.#context;
   }
 
-  get extension(): GlExtension{
+  get ext(): GlExtension{
     return this.#extension;
   }
 }

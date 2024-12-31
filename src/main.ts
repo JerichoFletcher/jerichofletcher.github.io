@@ -6,9 +6,11 @@ import { GlProgram, GlShader, ShaderType } from "./gl-shader-program";
 import { BufferDataUsage, BufferType, GlBuffer } from "./gl-buffer";
 import { GlVAO } from "./gl-vao";
 import { mat4 } from "gl-matrix";
+import { GlVersion } from "./gl-extension";
 
 function initialize(canvas: HTMLCanvasElement): GlWrapper{
-  const glWrapper = GlWrapper.latest(canvas);
+  // const glWrapper = GlWrapper.latest(canvas);
+  const glWrapper = GlWrapper.ofVersion(canvas, GlVersion.WebGL1);
   const gl = glWrapper.context.gl;
 
   const onResizeCanvas = () => {
@@ -32,6 +34,7 @@ function initialize(canvas: HTMLCanvasElement): GlWrapper{
   onResizeCanvas();
 
   console.log("Loaded WebGL version:", gl.getParameter(gl.VERSION));
+  console.log("Loaded extensions:", [...glWrapper.ext.loadedExtensions.keys()]);
   return glWrapper;
 }
 

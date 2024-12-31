@@ -11,7 +11,7 @@ export class GlVAO implements Disposable{
   private constructor(glWrapper: GlWrapper){
     this.#glWrapper = glWrapper;
 
-    const vaoHandle = glWrapper.extension.vertexArrayObject.create();
+    const vaoHandle = glWrapper.ext.vertexArray.createVertexArray();
     if(!vaoHandle){
       const err = glWrapper.context.gl.getError();
       throw new Error(`Failed to create VAO (error code ${err})`);
@@ -25,11 +25,11 @@ export class GlVAO implements Disposable{
   }
 
   bind(): void{
-    this.#glWrapper.extension.vertexArrayObject.bind(this.#vaoHandle.value);
+    this.#glWrapper.ext.vertexArray.bindVertexArray(this.#vaoHandle.value);
   }
   
   unbind(): void{
-    this.#glWrapper.extension.vertexArrayObject.bind(null);
+    this.#glWrapper.ext.vertexArray.bindVertexArray(null);
   }
 
   setAttribute(loc: GLint, vbo: GlVertexBuffer, size: GLuint, type: GLenum, stride: GLuint, offset: GLuint): void{
@@ -64,7 +64,7 @@ export class GlVAO implements Disposable{
 
   dispose(): void{
     if(!this.#disposed){
-      this.#glWrapper.extension.vertexArrayObject.delete(this.#vaoHandle.value);
+      this.#glWrapper.ext.vertexArray.deleteVertexArray(this.#vaoHandle.value);
       this.#disposed = true;
     }
   }
