@@ -148,9 +148,6 @@ export class GlProgram implements Disposable{
     this.#glWrapper.context.gl.useProgram(this.#progHandle.value);
   }
 
-  setUniform(name: string, val: number): void;
-  setUniform(name: string, val: number[]): void;
-  setUniform(name: string, val: Float32Array): void;
   setUniform(name: string, val: number | number[] | Float32Array): void{
     const gl = this.#glWrapper.context.gl;
     const info = this.#unifs.get(name);
@@ -158,20 +155,26 @@ export class GlProgram implements Disposable{
 
     if(typeof val === "number"){
       gl.uniform1f(info.location, val);
-    }else if(Array.isArray(val)){
+    }else if(Array.isArray(val) || val instanceof Float32Array){
       switch(val.length){
         case 2: gl.uniform2fv(info.location, val); break;
         case 3: gl.uniform3fv(info.location, val); break;
         case 4: gl.uniform4fv(info.location, val); break;
         default: throw new Error(`Unsupported uniform array size: ${val.length}`);
       }
-    }else if(val instanceof Float32Array){
-      switch(val.length){
-        case 4: gl.uniformMatrix2fv(info.location, false, val); break;
-        case 9: gl.uniformMatrix3fv(info.location, false, val); break;
-        case 16: gl.uniformMatrix4fv(info.location, false, val); break;
-        default: throw new Error(`Unsupported uniform matrix size: ${val.length}`);
-      }
+    }
+  }
+
+  setUniformMatrix(name: string, val: number[] | Float32Array): void{
+    const gl = this.#glWrapper.context.gl;
+    const info = this.#unifs.get(name);
+    if(!info)throw new Error(`Unknown uniform: ${name}`);
+
+    switch(val.length){
+      case 4: gl.uniformMatrix2fv(info.location, false, val); break;
+      case 9: gl.uniformMatrix3fv(info.location, false, val); break;
+      case 16: gl.uniformMatrix4fv(info.location, false, val); break;
+      default: throw new Error(`Unsupported uniform matrix size: ${val.length}`);
     }
   }
 
