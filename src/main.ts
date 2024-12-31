@@ -3,10 +3,8 @@ import { GlProgram, GlShader, ShaderType } from "./gl-shader-program";
 import { BufferDataUsage, BufferType, GlBuffer } from "./gl-buffer";
 import { GlVAO } from "./gl-vao";
 
-async function loadText(url: string): Promise<string>{
-  const resp = await fetch(url);
-  return await resp.text();
-}
+import vertSrc from "./shaders/test.vert.glsl";
+import fragSrc from "./shaders/test.frag.glsl";
 
 function initialize(canvas: HTMLCanvasElement): GlWrapper{
   const resizeCanvas = () => {
@@ -23,11 +21,8 @@ function initialize(canvas: HTMLCanvasElement): GlWrapper{
   return glWrapper;
 }
 
-async function beginDraw(glWrapper: GlWrapper){
+function beginDraw(glWrapper: GlWrapper){
   const gl = glWrapper.context.gl;
-
-  const vertSrc = await loadText("/shaders/test.vert.glsl");
-  const fragSrc = await loadText("/shaders/test.frag.glsl");
 
   const vertShader = GlShader.create(glWrapper, ShaderType.Vertex, vertSrc);
   const fragShader = GlShader.create(glWrapper, ShaderType.Fragment, fragSrc);
@@ -67,10 +62,10 @@ async function beginDraw(glWrapper: GlWrapper){
   renderLoop(0);
 }
 
-async function main(){
+function main(){
   const canvas = document.getElementById("cnv") as HTMLCanvasElement;  
   const glWrapper = initialize(canvas);
-  await beginDraw(glWrapper);
+  beginDraw(glWrapper);
 }
 
 main();
