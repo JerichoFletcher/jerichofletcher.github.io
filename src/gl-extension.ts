@@ -62,18 +62,20 @@ export class GlExtension{
     if(!ext)return null;
     
     const prefix = name.split("_", 1)[0];
-    const proto = Object.getPrototypeOf(ext) as Record<string, any>;
-    const res = Object.fromEntries(
-      Object.entries(proto).map(([key, val]) => [
-        key.replace(new RegExp(`_?${prefix}$`, "i"), ""),
-        typeof val === "function" ? this.callWithContext(ext, val) : val,
-      ])
-    );
-    res.isExtension = true;
-    return res as T;
+    const proto = Object.getPrototypeOf(ext) as Record<string, unknown>;
+    
+    return {
+      ...Object.fromEntries(
+        Object.entries(proto).map(([key, val]) => [
+          key.replace(new RegExp(`_?${prefix}$`, "i"), ""),
+          typeof val === "function" ? this.callWithContext(ext, val as (...args: unknown[]) => unknown) : val,
+        ])
+      ),
+      isExtension: true,
+    } as T;
   }
 
-  private callWithContext<T extends any[], U>(thisArg: any, method: (...args: T) => U){
+  private callWithContext<T extends unknown[], U>(thisArg: unknown, method: (...args: T) => U){
     return (...args: T) => method.call(thisArg, ...args);
   }
 
@@ -95,7 +97,7 @@ export class GlExtension{
   }
 
   get loadedExtensions(): ReadonlyMap<string, GlExtMethods>{
-    return new Map([...this.#ext.entries()].filter(([_, val]) => val.isExtension)) as ReadonlyMap<string, GlExtMethods>;
+    return new Map([...this.#ext.entries()].filter(([, val]) => val.isExtension)) as ReadonlyMap<string, GlExtMethods>;
   }
 
   get vertexArray(): GlVertexArrayFunctions{

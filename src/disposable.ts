@@ -27,7 +27,7 @@ export class DependsOnDisposedState<T>{
     return new DependsOnDisposedState(parent, ValidWhen.AfterDisposed, val);
   }
 
-  private executeWhenValid(f: Function){
+  private executeWhenValid<U>(f: () => U){
     switch(this.#validWhen){
       case ValidWhen.BeforeDisposed:
         if(this.#parent.isDisposed)throw new Error("Invalid state: Already disposed");
