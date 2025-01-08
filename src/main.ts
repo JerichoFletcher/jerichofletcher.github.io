@@ -6,7 +6,9 @@ import { GlProgram, GlShader, ShaderType } from "./gl-shader-program";
 import { BufferDataUsage, BufferType, GlBuffer } from "./gl-buffer";
 import { GlVAO } from "./gl-vao";
 import { mat4 } from "gl-matrix";
-import { GlVersion } from "./gl-extension";
+import { GlVersion } from "./gl-functions";
+import { usingBindables } from "./intfs/bindable";
+import { GlBufferLayout } from "./gl-layout";
 
 function initialize(canvas: HTMLCanvasElement): GlWrapper{
   // const glWrapper = GlWrapper.latest(canvas);
@@ -34,7 +36,7 @@ function initialize(canvas: HTMLCanvasElement): GlWrapper{
   onResizeCanvas();
 
   console.log("Loaded WebGL version:", gl.getParameter(gl.VERSION));
-  console.log("Loaded extensions:", [...glWrapper.ext.loadedExtensions.keys()]);
+  console.log("Loaded extensions:", [...glWrapper.funcs.loadedExtensions.keys()]);
   return glWrapper;
 }
 
@@ -46,13 +48,13 @@ function beginDraw(glWrapper: GlWrapper){
   const program = GlProgram.create(glWrapper, vertShader, fragShader);
 
   const vData = new Float32Array([
-    +0.000, +0.000, 0.5, 0.5, 0.5,
-    +0.000, +1.000, 1.0, 0.0, 0.0,
-    -0.866, +0.500, 1.0, 0.0, 1.0,
-    -0.866, -0.500, 0.0, 0.0, 1.0,
-    +0.000, -1.000, 0.0, 1.0, 1.0,
-    +0.866, -0.500, 0.0, 1.0, 0.0,
-    +0.866, +0.500, 1.0, 1.0, 0.0,
+    +0.000, +0.000, +0.000, 0.7, 0.7, 0.7,
+    +0.000, +1.000, +0.000, 1.0, 0.0, 0.0,
+    -0.866, +0.500, +0.000, 0.7, 0.0, 0.7,
+    -0.866, -0.500, +0.000, 0.0, 0.0, 1.0,
+    +0.000, -1.000, +0.000, 0.0, 0.7, 0.7,
+    +0.866, -0.500, +0.000, 0.0, 1.0, 0.0,
+    +0.866, +0.500, +0.000, 0.7, 0.7, 0.0,
   ]);
   const eData = new Int16Array([0, 1, 2, 3, 4, 5, 6, 1]);
   
@@ -62,44 +64,56 @@ function beginDraw(glWrapper: GlWrapper){
   ebo.setData(eData);
   
   const vao = GlVAO.create(glWrapper);
-  vao.setAttribute(0, vbo, 2, gl.FLOAT, 5 * vData.BYTES_PER_ELEMENT, 0 * vData.BYTES_PER_ELEMENT);
-  vao.setAttribute(1, vbo, 3, gl.FLOAT, 5 * vData.BYTES_PER_ELEMENT, 2 * vData.BYTES_PER_ELEMENT);
+  const layout = new GlBufferLayout(glWrapper);
+  layout.setAttribute({
+    attribName: "a_position",
+    targetBuffer: vbo,
+    stride: 6 * vData.BYTES_PER_ELEMENT,
+    offset: 0 * vData.BYTES_PER_ELEMENT,
+  }, {
+    attribName: "a_color",
+    targetBuffer: vbo,
+    stride: 6 * vData.BYTES_PER_ELEMENT,
+    offset: 3 * vData.BYTES_PER_ELEMENT,
+  });
+
+  layout.configure(vao, program);
   vao.bindElementBuffer(ebo);
   
   let aspect = gl.canvas.width / gl.canvas.height;
   const uWorld = mat4.create();
   const uView = mat4.lookAt(mat4.create(), [0, 0, 1], [0, 0, 0], [0, 1, 0]);
-  const uProj = mat4.ortho(mat4.create(), -aspect, aspect, -1, 1, -1, 1);
+  const uProj = mat4.ortho(mat4.create(), -aspect, aspect, -1, 1, 0, 1000);
 
-  program.use();
-  program.setUniformMatrix("u_world", uWorld);
-  program.setUniformMatrix("u_view", uView);
-  program.setUniformMatrix("u_proj", uProj);
+  usingBindables([program], () => {
+    program.setUniformMatrix("u_world", uWorld);
+    program.setUniformMatrix("u_view", uView);
+    program.setUniformMatrix("u_proj", uProj);
+  });
   
-  gl.enable(gl.CULL_FACE);
-  gl.cullFace(gl.BACK);
+  // gl.enable(gl.CULL_FACE);
+  // gl.cullFace(gl.BACK);
 
-  // let lastTime = 0;
+  let lastTime = 0;
   function renderLoop(t: number){
     gl.clear(gl.COLOR_BUFFER_BIT);
     
-    program.use();
-    program.setUniform("u_time", t / 1000);
+    usingBindables([program], () => {
+      program.setUniform("u_time", t / 1000);
 
-    // const deltaTime = lastTime - t;
-    // program.setUniformMatrix("u_world", mat4.rotateZ(uWorld, uWorld, deltaTime * Math.PI / 2000));
-    
-    const newAspect = gl.canvas.width / gl.canvas.height;
-    if(aspect !== newAspect){
-      aspect = newAspect;
-      program.setUniformMatrix("u_proj", mat4.ortho(uProj, -aspect, aspect, -1, 1, -1, 1));
-    }
-    
-    vao.bind();
-    gl.drawElements(gl.TRIANGLE_FAN, eData.length, gl.UNSIGNED_SHORT, 0);
-    vao.unbind();
+      const deltaTime = lastTime - t;
+      program.setUniformMatrix("u_world", mat4.rotateZ(uWorld, uWorld, deltaTime * Math.PI / 2000));
+      
+      const newAspect = gl.canvas.width / gl.canvas.height;
+      if(aspect !== newAspect){
+        aspect = newAspect;
+        program.setUniformMatrix("u_proj", mat4.ortho(uProj, -aspect, aspect, -1, 1, -1, 1));
+      }
+      
+      vao.drawElements(gl.TRIANGLE_FAN, eData.length, gl.UNSIGNED_SHORT, 0);
+    });
 
-    // lastTime = t;
+    lastTime = t;
     requestAnimationFrame(renderLoop);
   }
 

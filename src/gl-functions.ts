@@ -40,7 +40,7 @@ export type GlVersionedContext = {
   readonly gl: WebGL2RenderingContext,
 }
 
-export class GlExtension{
+export class GlFunctions{
   #ctx: GlVersionedContext;
   #ext: Map<string, GlExtMethods>;
 
@@ -97,7 +97,7 @@ export class GlExtension{
   }
 
   get loadedExtensions(): ReadonlyMap<string, GlExtMethods>{
-    return new Map([...this.#ext.entries()].filter(([, val]) => val.isExtension)) as ReadonlyMap<string, GlExtMethods>;
+    return new Map([...this.#ext.entries()].filter(([, val]) => val.isExtension));
   }
 
   get vertexArray(): GlVertexArrayFunctions{

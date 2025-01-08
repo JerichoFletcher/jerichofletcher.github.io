@@ -1,13 +1,12 @@
-import { DependsOnDisposedState, Disposable } from "./disposable";
+import { DependsOnDisposedState, Disposable } from "./intfs/disposable";
+import { GlUniformInfo, GlAttributeInfo, getUniformInfo, getAttribInfo } from "./gl-types";
 import { GlWrapper } from "./gl-wrapper";
+import { Bindable } from "./intfs/bindable";
 
 export enum ShaderType{
   Vertex,
   Fragment,
 }
-
-export type GlUniformInfo = Readonly<WebGLActiveInfo> & { readonly location: WebGLUniformLocation };
-export type GlAttributeInfo = Readonly<WebGLActiveInfo> & { readonly location: GLint };
 
 export type GlVertShader = GlShader & { type: ShaderType.Vertex };
 export type GlFragShader = GlShader & { type: ShaderType.Fragment };
@@ -75,7 +74,7 @@ export class GlShader implements Disposable{
   }
 }
 
-export class GlProgram implements Disposable{
+export class GlProgram implements Disposable, Bindable{
   #disposed: boolean;
   #glWrapper: GlWrapper;
   #progHandle: DependsOnDisposedState<WebGLProgram>;
@@ -114,24 +113,14 @@ export class GlProgram implements Disposable{
     for(let i = 0; i < numUniforms; i++){
       const info = gl.getActiveUniform(program, i)!;
       const location = gl.getUniformLocation(program, info.name)!;
-      this.#unifs.set(info.name, {
-        name: info.name,
-        size: info.size,
-        type: info.type,
-        location,
-      });
+      this.#unifs.set(info.name, getUniformInfo(glWrapper, info, location));
     }
 
     const numAttribs = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES) as number;
     for(let i = 0; i < numAttribs; i++){
       const info = gl.getActiveAttrib(program, i)!;
       const location = gl.getAttribLocation(program, info.name)!;
-      this.#attbs.set(info.name, {
-        name: info.name,
-        size: info.size,
-        type: info.type,
-        location,
-      });
+      this.#attbs.set(info.name, getAttribInfo(glWrapper, info, location));
     }
 
     this.#progHandle = DependsOnDisposedState.validBeforeDisposed(this, program);
@@ -144,8 +133,12 @@ export class GlProgram implements Disposable{
     return new GlProgram(glWrapper, vert, frag);
   }
 
-  use(): void{
+  bind(): void{
     this.#glWrapper.context.gl.useProgram(this.#progHandle.value);
+  }
+
+  unbind(): void{
+    this.#glWrapper.context.gl.useProgram(null);
   }
 
   setUniform(name: string, val: number | number[] | Float32Array): void{
@@ -195,11 +188,11 @@ export class GlProgram implements Disposable{
   }
 
   get uniforms(): ReadonlyMap<string, GlUniformInfo>{
-    return this.#unifs as ReadonlyMap<string, GlUniformInfo>;
+    return this.#unifs;
   }
 
   get attributes(): ReadonlyMap<string, GlAttributeInfo>{
-    return this.#attbs as ReadonlyMap<string, GlAttributeInfo>;
+    return this.#attbs;
   }
 
   get isDisposed(): boolean{

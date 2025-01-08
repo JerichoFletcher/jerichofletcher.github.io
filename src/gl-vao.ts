@@ -1,9 +1,10 @@
-import { DependsOnDisposedState, Disposable } from "./disposable";
+import { DependsOnDisposedState, Disposable } from "./intfs/disposable";
 import { GlVertexBuffer, GlElementBuffer } from "./gl-buffer";
-import { GlVAOHandle } from "./gl-extension";
+import { GlVAOHandle } from "./gl-functions";
 import { GlWrapper } from "./gl-wrapper";
+import { Bindable, usingBindables } from "./intfs/bindable";
 
-export class GlVAO implements Disposable{
+export class GlVAO implements Disposable, Bindable{
   #disposed: boolean;
   #glWrapper: GlWrapper;
   #vaoHandle: DependsOnDisposedState<GlVAOHandle>;
@@ -11,7 +12,7 @@ export class GlVAO implements Disposable{
   private constructor(glWrapper: GlWrapper){
     this.#glWrapper = glWrapper;
 
-    const vaoHandle = glWrapper.ext.vertexArray.createVertexArray();
+    const vaoHandle = glWrapper.funcs.vertexArray.createVertexArray();
     if(!vaoHandle){
       const err = glWrapper.context.gl.getError();
       throw new Error(`Failed to create VAO (error code ${err})`);
@@ -25,29 +26,28 @@ export class GlVAO implements Disposable{
   }
 
   bind(): void{
-    this.#glWrapper.ext.vertexArray.bindVertexArray(this.#vaoHandle.value);
+    this.#glWrapper.funcs.vertexArray.bindVertexArray(this.#vaoHandle.value);
   }
   
   unbind(): void{
-    this.#glWrapper.ext.vertexArray.bindVertexArray(null);
+    this.#glWrapper.funcs.vertexArray.bindVertexArray(null);
   }
 
-  setAttribute(loc: GLint, vbo: GlVertexBuffer, size: GLuint, type: GLenum, stride: GLuint, offset: GLuint): void{
-    this.bind();
-    vbo.bind();
-
-    const gl = this.#glWrapper.context.gl;
-    gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc, size, type, false, stride, offset);
-
-    vbo.unbind();
-    this.unbind();
+  setAttribute(loc: GLint, vbo: GlVertexBuffer, size: GLuint, type: GLenum, normalized: boolean, stride: GLuint, offset: GLuint): void{
+    usingBindables([this, vbo], () => {
+      const gl = this.#glWrapper.context.gl;
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, size, type, normalized, stride, offset);
+    });
   }
 
   bindElementBuffer(ebo: GlElementBuffer): void{
-    this.bind();
-    ebo.bind();
-    this.unbind();
+    usingBindables([this], () => ebo.bind());
+    ebo.unbind();
+  }
+
+  drawElements(mode: GLenum, count: GLsizei, type: GLenum, offset: GLintptr): void{
+    usingBindables([this], () => this.#glWrapper.context.gl.drawElements(mode, count, type, offset));
   }
 
   get contextWrapper(): GlWrapper{
@@ -64,7 +64,7 @@ export class GlVAO implements Disposable{
 
   dispose(): void{
     if(!this.#disposed){
-      this.#glWrapper.ext.vertexArray.deleteVertexArray(this.#vaoHandle.value);
+      this.#glWrapper.funcs.vertexArray.deleteVertexArray(this.#vaoHandle.value);
       this.#disposed = true;
     }
   }

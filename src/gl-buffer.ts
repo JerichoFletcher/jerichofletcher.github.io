@@ -1,5 +1,6 @@
-import { DependsOnDisposedState, Disposable } from "./disposable";
+import { DependsOnDisposedState, Disposable } from "./intfs/disposable";
 import { GlWrapper } from "./gl-wrapper";
+import { Bindable, usingBindables } from "./intfs/bindable";
 
 export enum BufferType{
   Array,
@@ -15,7 +16,7 @@ export enum BufferDataUsage{
 export type GlVertexBuffer = GlBuffer & { type: BufferType.Array };
 export type GlElementBuffer = GlBuffer & { type: BufferType.Element };
 
-export class GlBuffer implements Disposable{
+export class GlBuffer implements Disposable, Bindable{
   #disposed: boolean;
   #glWrapper: GlWrapper;
   #type: BufferType;
@@ -67,9 +68,7 @@ export class GlBuffer implements Disposable{
   }
 
   setData(data: AllowSharedBufferSource | null): void{
-    this.bind();
-    this.#glWrapper.context.gl.bufferData(this.target, data, this.usage);
-    this.unbind();
+    usingBindables([this], () => this.#glWrapper.context.gl.bufferData(this.target, data, this.usage));
   }
 
   get contextWrapper(): GlWrapper{

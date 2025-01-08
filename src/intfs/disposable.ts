@@ -27,7 +27,7 @@ export class DependsOnDisposedState<T>{
     return new DependsOnDisposedState(parent, ValidWhen.AfterDisposed, val);
   }
 
-  private executeWhenValid<U>(f: () => U){
+  private executeWhenValid<U>(f: () => U): U{
     switch(this.#validWhen){
       case ValidWhen.BeforeDisposed:
         if(this.#parent.isDisposed)throw new Error("Invalid state: Already disposed");
@@ -38,8 +38,8 @@ export class DependsOnDisposedState<T>{
     }
   }
 
-  get value(){
-    return this.executeWhenValid(() => this.#val) as T;
+  get value(): T{
+    return this.executeWhenValid(() => this.#val);
   }
 
   set value(val: T){
@@ -47,9 +47,9 @@ export class DependsOnDisposedState<T>{
   }
 }
 
-export function using<T extends Disposable[], U>(o: [...T], f: (...args: T) => U){
+export function usingDisposables<T extends Disposable[], U>(o: [...T], f: () => U): U{
   try{
-    return f(...o);
+    return f();
   }finally{
     for(let i = o.length - 1; i >= 0; i--){
       o[i].dispose();
