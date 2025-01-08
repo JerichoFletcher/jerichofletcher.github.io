@@ -2,13 +2,15 @@ import vertSrc from "./shaders/test.vert.glsl";
 import fragSrc from "./shaders/test.frag.glsl";
 
 import { GlWrapper } from "./gl-wrapper";
-import { GlProgram, GlShader, ShaderType } from "./gl-shader-program";
-import { BufferDataUsage, BufferType, GlBuffer } from "./gl-buffer";
+import { GlProgram, GlShader } from "./gl-shader-program";
+import { GlBuffer } from "./gl-buffer";
 import { GlVAO } from "./gl-vao";
 import { mat4 } from "gl-matrix";
 import { GlVersion } from "./gl-functions";
 import { usingBindables } from "./intfs/bindable";
 import { GlBufferLayout } from "./gl-layout";
+import * as E from "./gl-enum";
+import { GlTexture } from "./gl-texture";
 
 function initialize(canvas: HTMLCanvasElement): GlWrapper{
   // const glWrapper = GlWrapper.latest(canvas);
@@ -43,40 +45,40 @@ function initialize(canvas: HTMLCanvasElement): GlWrapper{
 function beginDraw(glWrapper: GlWrapper){
   const gl = glWrapper.context.gl;
 
-  const vertShader = GlShader.create(glWrapper, ShaderType.Vertex, vertSrc);
-  const fragShader = GlShader.create(glWrapper, ShaderType.Fragment, fragSrc);
+  const vertShader = GlShader.create(glWrapper, E.ShaderType.Vertex, vertSrc);
+  const fragShader = GlShader.create(glWrapper, E.ShaderType.Fragment, fragSrc);
   const program = GlProgram.create(glWrapper, vertShader, fragShader);
 
   const vData = new Float32Array([
-    +0.000, +0.000, +0.000, 0.7, 0.7, 0.7,
-    +0.000, +1.000, +0.000, 1.0, 0.0, 0.0,
-    -0.866, +0.500, +0.000, 0.7, 0.0, 0.7,
-    -0.866, -0.500, +0.000, 0.0, 0.0, 1.0,
-    +0.000, -1.000, +0.000, 0.0, 0.7, 0.7,
-    +0.866, -0.500, +0.000, 0.0, 1.0, 0.0,
-    +0.866, +0.500, +0.000, 0.7, 0.7, 0.0,
+    -0.500, +0.500, +0.000, 1.0, 1.0, 1.0, 0.0, 0.0,
+    +0.500, +0.500, +0.000, 1.0, 1.0, 1.0, 1.0, 0.0,
+    +0.500, -0.500, +0.000, 1.0, 1.0, 1.0, 1.0, 1.0,
+    -0.500, -0.500, +0.000, 1.0, 1.0, 1.0, 0.0, 1.0,
   ]);
-  const eData = new Int16Array([0, 1, 2, 3, 4, 5, 6, 1]);
+  const eData = new Int16Array([0, 1, 2, 0, 2, 3]);
   
-  const vbo = GlBuffer.create(glWrapper, BufferType.Array, BufferDataUsage.Static);
-  const ebo = GlBuffer.create(glWrapper, BufferType.Element, BufferDataUsage.Static);
-  vbo.setData(vData);
-  ebo.setData(eData);
+  const vbo = GlBuffer.create(glWrapper, E.BufferType.Array, E.BufferDataUsage.Static, vData);
+  const ebo = GlBuffer.create(glWrapper, E.BufferType.Element, E.BufferDataUsage.Static, eData);
   
-  const vao = GlVAO.create(glWrapper);
   const layout = new GlBufferLayout(glWrapper);
   layout.setAttribute({
     attribName: "a_position",
     targetBuffer: vbo,
-    stride: 6 * vData.BYTES_PER_ELEMENT,
+    stride: 8 * vData.BYTES_PER_ELEMENT,
     offset: 0 * vData.BYTES_PER_ELEMENT,
   }, {
     attribName: "a_color",
     targetBuffer: vbo,
-    stride: 6 * vData.BYTES_PER_ELEMENT,
+    stride: 8 * vData.BYTES_PER_ELEMENT,
     offset: 3 * vData.BYTES_PER_ELEMENT,
+  }, {
+    attribName: "a_uv",
+    targetBuffer: vbo,
+    stride: 8 * vData.BYTES_PER_ELEMENT,
+    offset: 6 * vData.BYTES_PER_ELEMENT,
   });
-
+  
+  const vao = GlVAO.create(glWrapper);
   layout.configure(vao, program);
   vao.bindElementBuffer(ebo);
   
@@ -85,39 +87,44 @@ function beginDraw(glWrapper: GlWrapper){
   const uView = mat4.lookAt(mat4.create(), [0, 0, 1], [0, 0, 0], [0, 1, 0]);
   const uProj = mat4.ortho(mat4.create(), -aspect, aspect, -1, 1, 0, 1000);
 
+  const uTexture = GlTexture.create(glWrapper, 0);
+  uTexture.setFilter(E.TextureMinFilter.Nearest, E.TextureMagFilter.Nearest);
+  uTexture.setTextureWrap(E.TextureWrap.ClampToEdge, E.TextureWrap.ClampToEdge);
+  uTexture.setData(new Uint8Array([
+    63, 63, 0, 127, 63, 0, 191, 63, 0, 255, 63, 0,
+    63, 127, 0, 127, 127, 0, 191, 127, 0, 255, 127, 0,
+    63, 191, 0, 127, 191, 0, 191, 191, 0, 255, 191, 0,
+    63, 255, 0, 127, 255, 0, 191, 255, 0, 255, 255, 0,
+  ]), gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, 4, 4);
+
   usingBindables([program], () => {
-    program.setUniformMatrix("u_world", uWorld);
-    program.setUniformMatrix("u_view", uView);
-    program.setUniformMatrix("u_proj", uProj);
+    program.setUniform("u_world", uWorld);
+    program.setUniform("u_view", uView);
+    program.setUniform("u_proj", uProj);
+    program.setUniform("u_texture", uTexture);
   });
-  
-  // gl.enable(gl.CULL_FACE);
-  // gl.cullFace(gl.BACK);
 
   let lastTime = 0;
   function renderLoop(t: number){
     gl.clear(gl.COLOR_BUFFER_BIT);
     
     usingBindables([program], () => {
-      program.setUniform("u_time", t / 1000);
-
       const deltaTime = lastTime - t;
-      program.setUniformMatrix("u_world", mat4.rotateZ(uWorld, uWorld, deltaTime * Math.PI / 2000));
+      program.setUniform("u_world", mat4.rotateZ(uWorld, uWorld, deltaTime * Math.PI / 5000));
       
       const newAspect = gl.canvas.width / gl.canvas.height;
       if(aspect !== newAspect){
         aspect = newAspect;
-        program.setUniformMatrix("u_proj", mat4.ortho(uProj, -aspect, aspect, -1, 1, -1, 1));
+        program.setUniform("u_proj", mat4.ortho(uProj, -aspect, aspect, -1, 1, 0, 1000));
       }
       
-      vao.drawElements(gl.TRIANGLE_FAN, eData.length, gl.UNSIGNED_SHORT, 0);
+      vao.drawElements(program, E.DrawMode.TriangleFan, eData.length, E.DType.UShort, 0);
     });
 
     lastTime = t;
     requestAnimationFrame(renderLoop);
   }
-
-  renderLoop(0);
+  requestAnimationFrame(renderLoop);
 }
 
 function main(){

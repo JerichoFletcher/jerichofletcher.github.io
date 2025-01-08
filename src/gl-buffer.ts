@@ -1,29 +1,19 @@
 import { DependsOnDisposedState, Disposable } from "./intfs/disposable";
 import { GlWrapper } from "./gl-wrapper";
 import { Bindable, usingBindables } from "./intfs/bindable";
+import * as E from "./gl-enum";
 
-export enum BufferType{
-  Array,
-  Element,
-}
-
-export enum BufferDataUsage{
-  Static,
-  Dynamic,
-  Stream,
-}
-
-export type GlVertexBuffer = GlBuffer & { type: BufferType.Array };
-export type GlElementBuffer = GlBuffer & { type: BufferType.Element };
+export type GlVertexBuffer = GlBuffer & { type: E.BufferType.Array };
+export type GlElementBuffer = GlBuffer & { type: E.BufferType.Element };
 
 export class GlBuffer implements Disposable, Bindable{
   #disposed: boolean;
   #glWrapper: GlWrapper;
-  #type: BufferType;
-  #usage: BufferDataUsage;
+  #type: E.BufferType;
+  #usage: E.BufferDataUsage;
   #bufHandle: DependsOnDisposedState<WebGLBuffer>;
 
-  private constructor(glWrapper: GlWrapper, type: BufferType, usage: BufferDataUsage){
+  private constructor(glWrapper: GlWrapper, type: E.BufferType, usage: E.BufferDataUsage){
     this.#glWrapper = glWrapper;
     this.#type = type;
     this.#usage = usage;
@@ -37,45 +27,33 @@ export class GlBuffer implements Disposable, Bindable{
     this.#disposed = false;
   }
 
-  static create(glWrapper: GlWrapper, type: BufferType.Array, usage: BufferDataUsage): GlVertexBuffer;
-  static create(glWrapper: GlWrapper, type: BufferType.Element, usage: BufferDataUsage): GlElementBuffer;
-  static create(glWrapper: GlWrapper, type: BufferType, usage: BufferDataUsage){
-    return new GlBuffer(glWrapper, type, usage);
-  }
+  static create(glWrapper: GlWrapper, type: E.BufferType.Array, usage: E.BufferDataUsage, data?: AllowSharedBufferSource): GlVertexBuffer;
+  static create(glWrapper: GlWrapper, type: E.BufferType.Element, usage: E.BufferDataUsage, data?: AllowSharedBufferSource): GlElementBuffer;
+  static create(glWrapper: GlWrapper, type: E.BufferType, usage: E.BufferDataUsage, data?: AllowSharedBufferSource){
+    const buf = new GlBuffer(glWrapper, type, usage);
+    if(data)buf.setData(data);
 
-  private get target(): GLenum{
-    switch(this.#type){
-      case BufferType.Array: return this.#glWrapper.context.gl.ARRAY_BUFFER;
-      case BufferType.Element: return this.#glWrapper.context.gl.ELEMENT_ARRAY_BUFFER;
-    }
-  }
-
-  private get usage(): GLenum{
-    switch(this.#usage){
-      case BufferDataUsage.Static: return this.#glWrapper.context.gl.STATIC_DRAW;
-      case BufferDataUsage.Dynamic: return this.#glWrapper.context.gl.DYNAMIC_DRAW;
-      case BufferDataUsage.Stream: return this.#glWrapper.context.gl.STREAM_DRAW;
-    }
+    return buf;
   }
 
   bind(): void{
     const buf = this.#bufHandle.value;
-    this.#glWrapper.context.gl.bindBuffer(this.target, buf);
+    this.#glWrapper.context.gl.bindBuffer(this.#type, buf);
   }
 
   unbind(): void{
-    this.#glWrapper.context.gl.bindBuffer(this.target, null);
+    this.#glWrapper.context.gl.bindBuffer(this.#type, null);
   }
 
   setData(data: AllowSharedBufferSource | null): void{
-    usingBindables([this], () => this.#glWrapper.context.gl.bufferData(this.target, data, this.usage));
+    usingBindables([this], () => this.#glWrapper.context.gl.bufferData(this.#type, data, this.#usage));
   }
 
   get contextWrapper(): GlWrapper{
     return this.#glWrapper;
   }
 
-  get type(): BufferType{
+  get type(): E.BufferType{
     return this.#type;
   }
 
@@ -89,7 +67,7 @@ export class GlBuffer implements Disposable, Bindable{
 
   dispose(): void{
     if(!this.#disposed){
-      this.#glWrapper.context.gl.deleteBuffer(this.#bufHandle);
+      this.#glWrapper.context.gl.deleteBuffer(this.#bufHandle.value);
       this.#disposed = true;
     }
   }

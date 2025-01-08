@@ -1,29 +1,27 @@
 import { DependsOnDisposedState, Disposable } from "./intfs/disposable";
-import { GlUniformInfo, GlAttributeInfo, getUniformInfo, getAttribInfo } from "./gl-types";
+import { GlUniformInfo, GlAttributeInfo, getUniformInfo, getAttribInfo } from "./gl-info";
 import { GlWrapper } from "./gl-wrapper";
-import { Bindable } from "./intfs/bindable";
+import { Bindable, usingBindables } from "./intfs/bindable";
+import * as E from "./gl-enum";
+import { GlTexture } from "./gl-texture";
+import { isBoolArray, isNumberArray } from "./type-guards";
 
-export enum ShaderType{
-  Vertex,
-  Fragment,
-}
-
-export type GlVertShader = GlShader & { type: ShaderType.Vertex };
-export type GlFragShader = GlShader & { type: ShaderType.Fragment };
+export type GlVertShader = GlShader & { type: E.ShaderType.Vertex };
+export type GlFragShader = GlShader & { type: E.ShaderType.Fragment };
 
 export class GlShader implements Disposable{
   #disposed: boolean;
   #glWrapper: GlWrapper;
-  #type: ShaderType;
+  #type: E.ShaderType;
   #shaderHandle: DependsOnDisposedState<WebGLShader>;
 
-  private constructor(glWrapper: GlWrapper, type: ShaderType, src: string){
+  private constructor(glWrapper: GlWrapper, type: E.ShaderType, src: string){
     this.#glWrapper = glWrapper;
     this.#type = type;
     
     const gl = glWrapper.context.gl;
 
-    const shader = gl.createShader(type === ShaderType.Vertex ? gl.VERTEX_SHADER : gl.FRAGMENT_SHADER);
+    const shader = gl.createShader(type);
     if(!shader){
       const err = gl.getError();
       throw new Error(`Failed to create shader (error code ${err})`);
@@ -44,9 +42,9 @@ export class GlShader implements Disposable{
     this.#disposed = false;
   }
 
-  static create(glWrapper: GlWrapper, type: ShaderType.Vertex, src: string): GlVertShader;
-  static create(glWrapper: GlWrapper, type: ShaderType.Fragment, src: string): GlFragShader;
-  static create(glWrapper: GlWrapper, type: ShaderType, src: string){
+  static create(glWrapper: GlWrapper, type: E.ShaderType.Vertex, src: string): GlVertShader;
+  static create(glWrapper: GlWrapper, type: E.ShaderType.Fragment, src: string): GlFragShader;
+  static create(glWrapper: GlWrapper, type: E.ShaderType, src: string){
     return new GlShader(glWrapper, type, src)
   }
 
@@ -54,7 +52,7 @@ export class GlShader implements Disposable{
     return this.#glWrapper;
   }
 
-  get type(): ShaderType{
+  get type(): E.ShaderType{
     return this.#type;
   }
 
@@ -113,14 +111,14 @@ export class GlProgram implements Disposable, Bindable{
     for(let i = 0; i < numUniforms; i++){
       const info = gl.getActiveUniform(program, i)!;
       const location = gl.getUniformLocation(program, info.name)!;
-      this.#unifs.set(info.name, getUniformInfo(glWrapper, info, location));
+      this.#unifs.set(info.name, getUniformInfo(info, location));
     }
 
     const numAttribs = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES) as number;
     for(let i = 0; i < numAttribs; i++){
       const info = gl.getActiveAttrib(program, i)!;
       const location = gl.getAttribLocation(program, info.name)!;
-      this.#attbs.set(info.name, getAttribInfo(glWrapper, info, location));
+      this.#attbs.set(info.name, getAttribInfo(info, location));
     }
 
     this.#progHandle = DependsOnDisposedState.validBeforeDisposed(this, program);
@@ -141,34 +139,140 @@ export class GlProgram implements Disposable, Bindable{
     this.#glWrapper.context.gl.useProgram(null);
   }
 
-  setUniform(name: string, val: number | number[] | Float32Array): void{
-    const gl = this.#glWrapper.context.gl;
-    const info = this.#unifs.get(name);
-    if(!info)throw new Error(`Unknown uniform: ${name}`);
+  setUniform(name: string, val: boolean | boolean[] | number | number[] | AllowSharedBufferSource | GlTexture): void{
+    usingBindables([this], () => {
+      const gl = this.#glWrapper.context.gl;
+      const info = this.#unifs.get(name);
+      if(!info)throw new Error(`Unknown uniform: ${name}`);
 
-    if(typeof val === "number"){
-      gl.uniform1f(info.location, val);
-    }else if(Array.isArray(val) || val instanceof Float32Array){
-      switch(val.length){
-        case 2: gl.uniform2fv(info.location, val); break;
-        case 3: gl.uniform3fv(info.location, val); break;
-        case 4: gl.uniform4fv(info.location, val); break;
-        default: throw new Error(`Unsupported uniform array size: ${val.length}`);
+      switch(info.type){
+        case E.DType.Bool:
+          if(typeof val !== "boolean")throw new Error(`Wrong data type for uniform ${name}; expected boolean, found ${typeof val}`);
+          gl.uniform1i(info.location, val ? 1 : 0);
+          break;
+        case E.DType.Byte:
+        case E.DType.UByte:
+        case E.DType.Short:
+        case E.DType.UShort:
+        case E.DType.Int:
+        case E.DType.UInt:
+          if(typeof val !== "number")throw new Error(`Wrong data type for uniform ${name}; expected number, found ${typeof val}`);
+          gl.uniform1i(info.location, val);
+          break;
+        case E.DType.Float:
+          if(typeof val !== "number")throw new Error(`Wrong data type for uniform ${name}; expected number, found ${typeof val}`);
+          gl.uniform1f(info.location, val);
+          break;
+        case E.DTypeVec.Float2:
+        case E.DTypeVec.Float3:
+        case E.DTypeVec.Float4:
+          if(!isNumberArray(val) && !(val instanceof Float32Array))
+            throw new Error(`Wrong data type for uniform ${name}; expected number[] | Float32Array, found ${typeof val}`);
+
+          {
+            let expectedLength: number;
+            switch(info.type){
+              case E.DTypeVec.Float2: expectedLength = 2; break;
+              case E.DTypeVec.Float3: expectedLength = 3; break;
+              case E.DTypeVec.Float4: expectedLength = 4; break;
+            }
+            if(val.length !== expectedLength)throw new Error(`Wrong data size for uniform ${name}; expected ${expectedLength}, found ${val.length}`);
+
+            switch(info.type){
+              case E.DTypeVec.Float2: gl.uniform2fv(info.location, val); break;
+              case E.DTypeVec.Float3: gl.uniform3fv(info.location, val); break;
+              case E.DTypeVec.Float4: gl.uniform4fv(info.location, val); break;
+            }
+          }
+
+          break;
+        case E.DTypeVec.Int2:
+        case E.DTypeVec.Int3:
+        case E.DTypeVec.Int4:
+          if(!isNumberArray(val) || !(val instanceof Int32Array || val instanceof Uint32Array))
+            throw new Error(`Wrong data type for uniform ${name}; expected number[] | Float32Array, found ${typeof val}`);
+
+          {
+            let expectedLength: number;
+            switch(info.type){
+              case E.DTypeVec.Int2: expectedLength = 2; break;
+              case E.DTypeVec.Int3: expectedLength = 3; break;
+              case E.DTypeVec.Int4: expectedLength = 4; break;
+            }
+            if(val.length !== expectedLength)throw new Error(`Wrong data size for uniform ${name}; expected ${expectedLength}, found ${val.length}`);
+            
+            switch(info.type){
+              case E.DTypeVec.Int2: gl.uniform2iv(info.location, val); break;
+              case E.DTypeVec.Int3: gl.uniform3iv(info.location, val); break;
+              case E.DTypeVec.Int4: gl.uniform4iv(info.location, val); break;
+            }
+          }
+
+          break;
+        case E.DTypeVec.Bool2:
+        case E.DTypeVec.Bool3:
+        case E.DTypeVec.Bool4:
+          if(!isBoolArray(val) || !(val instanceof Uint8Array))
+            throw new Error(`Wrong data type for uniform ${name}; expected boolean[] | Uint8Array, found ${typeof val}`);
+
+          {
+            let expectedLength: number;
+            switch(info.type){
+              case E.DTypeVec.Bool2: expectedLength = 2; break;
+              case E.DTypeVec.Bool3: expectedLength = 3; break;
+              case E.DTypeVec.Bool4: expectedLength = 4; break;
+            }
+            if(val.length !== expectedLength)throw new Error(`Wrong data size for uniform ${name}; expected ${expectedLength}, found ${val.length}`);
+            
+            switch(info.type){
+              case E.DTypeVec.Bool2: gl.uniform2iv(info.location, val); break;
+              case E.DTypeVec.Bool3: gl.uniform3iv(info.location, val); break;
+              case E.DTypeVec.Bool4: gl.uniform4iv(info.location, val); break;
+            }
+          }
+
+          break;
+        case E.DTypeMat.FloatM2:
+        case E.DTypeMat.FloatM3:
+        case E.DTypeMat.FloatM4:
+          if(!isNumberArray(val) && !(val instanceof Float32Array))
+            throw new Error(`Wrong data type for uniform ${name}; expected number[] | Float32Array, found ${typeof val}`);
+
+          {
+            let expectedLength: number;
+            switch(info.type){
+              case E.DTypeMat.FloatM2: expectedLength = 4; break;
+              case E.DTypeMat.FloatM3: expectedLength = 9; break;
+              case E.DTypeMat.FloatM4: expectedLength = 16; break;
+            }
+            if(val.length !== expectedLength)throw new Error(`Wrong data size for uniform ${name}; expected ${expectedLength}, found ${val.length}`);
+
+            switch(info.type){
+              case E.DTypeMat.FloatM2: gl.uniformMatrix2fv(info.location, false, val); break;
+              case E.DTypeMat.FloatM3: gl.uniformMatrix3fv(info.location, false, val); break;
+              case E.DTypeMat.FloatM4: gl.uniformMatrix4fv(info.location, false, val); break;
+            }
+          }
+
+          break;
+        case E.DTypeSampler.Sampler2D:
+          if(!(val instanceof GlTexture))throw new Error(`Wrong data type for uniform ${name}; expected GlTexture, found ${typeof val}`);
+          val.bind();
+          gl.uniform1i(info.location, val.textureUnit);
+          break;
+        case E.DTypeSampler.SamplerCube:
+          throw new Error("Sampler cube uniform not implemented");
       }
-    }
+    });
   }
 
-  setUniformMatrix(name: string, val: number[] | Float32Array): void{
+  setUniformTexture(name: string, texture: GlTexture): void{
     const gl = this.#glWrapper.context.gl;
     const info = this.#unifs.get(name);
     if(!info)throw new Error(`Unknown uniform: ${name}`);
 
-    switch(val.length){
-      case 4: gl.uniformMatrix2fv(info.location, false, val); break;
-      case 9: gl.uniformMatrix3fv(info.location, false, val); break;
-      case 16: gl.uniformMatrix4fv(info.location, false, val); break;
-      default: throw new Error(`Unsupported uniform matrix size: ${val.length}`);
-    }
+    texture.bind();
+    gl.uniform1i(info.location, texture.textureUnit);
   }
 
   get contextWrapper(): GlWrapper{
@@ -201,9 +305,9 @@ export class GlProgram implements Disposable, Bindable{
 
   dispose(): void{
     if(!this.#disposed){
-      this.#glWrapper.context.gl.detachShader(this.#progHandle, this.#vert.shader);
-      this.#glWrapper.context.gl.detachShader(this.#progHandle, this.#frag.shader);
-      this.#glWrapper.context.gl.deleteProgram(this.#progHandle);
+      this.#glWrapper.context.gl.detachShader(this.#progHandle.value, this.#vert.shader);
+      this.#glWrapper.context.gl.detachShader(this.#progHandle.value, this.#frag.shader);
+      this.#glWrapper.context.gl.deleteProgram(this.#progHandle.value);
       this.#disposed = true;
     }
   }

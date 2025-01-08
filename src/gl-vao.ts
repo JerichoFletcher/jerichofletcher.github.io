@@ -3,6 +3,8 @@ import { GlVertexBuffer, GlElementBuffer } from "./gl-buffer";
 import { GlVAOHandle } from "./gl-functions";
 import { GlWrapper } from "./gl-wrapper";
 import { Bindable, usingBindables } from "./intfs/bindable";
+import * as E from "./gl-enum";
+import { GlProgram } from "./gl-shader-program";
 
 export class GlVAO implements Disposable, Bindable{
   #disposed: boolean;
@@ -33,7 +35,7 @@ export class GlVAO implements Disposable, Bindable{
     this.#glWrapper.funcs.vertexArray.bindVertexArray(null);
   }
 
-  setAttribute(loc: GLint, vbo: GlVertexBuffer, size: GLuint, type: GLenum, normalized: boolean, stride: GLuint, offset: GLuint): void{
+  setAttribute(loc: GLint, vbo: GlVertexBuffer, size: GLuint, type: E.DType, normalized: boolean, stride: GLuint, offset: GLuint): void{
     usingBindables([this, vbo], () => {
       const gl = this.#glWrapper.context.gl;
       gl.enableVertexAttribArray(loc);
@@ -46,8 +48,8 @@ export class GlVAO implements Disposable, Bindable{
     ebo.unbind();
   }
 
-  drawElements(mode: GLenum, count: GLsizei, type: GLenum, offset: GLintptr): void{
-    usingBindables([this], () => this.#glWrapper.context.gl.drawElements(mode, count, type, offset));
+  drawElements(program: GlProgram, mode: E.DrawMode, count: GLsizei, type: E.DType, offset: GLintptr): void{
+    usingBindables([program, this], () => this.#glWrapper.context.gl.drawElements(mode, count, type, offset));
   }
 
   get contextWrapper(): GlWrapper{
